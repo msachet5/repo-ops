@@ -1,0 +1,28 @@
+name: Archive GitHub metrics
+# Runs weekly in a private "repo-ops" repository. Add a fine-grained token with
+# Administration: read on your public repos as the secret METRICS_TOKEN.
+on:
+  schedule:
+    - cron: "23 11 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install requests
+      - env:
+          GITHUB_TOKEN: ${{ secrets.METRICS_TOKEN }}
+        run: |
+          python scripts/archive_github_metrics.py \
+            msachet5/obsidian-ultisync msachet5/forecast-value-added msachet5/planner-skills \
+            msachet5/canada-supply-chain-pressure-index --out metrics
+          python scripts/package_downloads.py forecast-value-added cscpi --out metrics/pypi.csv || true
+          python scripts/weekly_report.py --metrics metrics --out metrics/REPORT.md
+      - run: |
+          git config user.name metrics-bot && git config user.email actions@users.noreply.github.com
+          git add metrics && (git diff --cached --quiet || git commit -m "metrics: $(date +%F)") && git push
